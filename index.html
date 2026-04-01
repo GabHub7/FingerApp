@@ -1,218 +1,122 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Finger Detection HP Stable</title>
+  <title>Finger Detection Fix</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-
-  <style>
-    body{
-      background:#0f172a;
-      color:white;
-      font-family:Arial;
-      margin:0;
-      text-align:center;
-    }
-
-    .container{
-      display:flex;
-      flex-wrap:wrap;
-    }
-
-    .left{
-      width:40%;
-      padding:10px;
-      background:#1e293b;
-    }
-
-    .right{
-      width:60%;
-    }
-
-    input{
-      width:90%;
-      margin-bottom:8px;
-      padding:6px;
-      border-radius:8px;
-      border:none;
-    }
-
-    canvas{
-      width:90%;
-      margin-top:10px;
-      border-radius:15px;
-    }
-
-    .overlay{
-      position:absolute;
-      top:10px;
-      left:10px;
-      background:rgba(0,0,0,0.6);
-      padding:8px;
-      border-radius:10px;
-      color:#22c55e;
-    }
-
-    .box{
-      position:relative;
-      display:inline-block;
-    }
-
-    button{
-      position:fixed;
-      top:10px;
-      right:10px;
-      padding:10px;
-      border:none;
-      border-radius:10px;
-      background:#22c55e;
-      color:white;
-    }
-  </style>
 </head>
 
-<body>
+<body style="background:black; color:white; text-align:center;">
 
-<button onclick="enableSound()">🔊 Aktifkan Suara</button>
+<button onclick="enableSound()">Aktifkan Suara</button>
 
-<div class="container">
+<h2>Kamera</h2>
 
-<div class="left">
-<h3>⚙️ Setting Suara Jari</h3>
-<div id="settings"></div>
-</div>
+<video id="video" autoplay playsinline style="display:none;"></video>
+<canvas id="canvas"></canvas>
 
-<div class="right">
-<h3>📷 Kamera</h3>
-
-<div class="box">
-  <video id="video" autoplay playsinline style="display:none;"></video>
-  <canvas id="canvas"></canvas>
-  <div id="count" class="overlay">Jumlah jari: 0</div>
-</div>
-
+<h3 id="count">Jumlah jari: 0</h3>
 <h3 id="status">Menunggu...</h3>
-</div>
-
-</div>
 
 <script>
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+
 const countText = document.getElementById("count");
 const statusText = document.getElementById("status");
 
 // SOUND
 let soundEnabled = false;
-let lastSpeak = 0;
 
 function enableSound(){
   soundEnabled = true;
-  speechSynthesis.speak(new SpeechSynthesisUtterance("suara aktif"));
+  speechSynthesis.speak(new SpeechSynthesisUtterance("aktif"));
 }
 
 function speak(text){
   if(!soundEnabled) return;
-
-  let now = Date.now();
-  if(now - lastSpeak < 1500) return;
-
   speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-  lastSpeak = now;
 }
 
-// SETTINGS JARI 1–10
-let sounds = JSON.parse(localStorage.getItem("sounds")) || {};
-const settingsDiv = document.getElementById("settings");
-
-for(let i=1;i<=10;i++){
-  if(!sounds[i]) sounds[i] = "Jari " + i;
-
-  settingsDiv.innerHTML += `
-    <label>Jari ${i}</label><br>
-    <input id="f${i}" value="${sounds[i]}"><br>
-  `;
-}
-
-// SAVE AUTO
-setInterval(()=>{
-  for(let i=1;i<=10;i++){
-    sounds[i] = document.getElementById("f"+i).value;
-  }
-  localStorage.setItem("sounds", JSON.stringify(sounds));
-},1000);
-
-// MEDIAPIPE HANDS
+// MEDIAPIPE
 const hands = new Hands({
-  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+  locateFile: (file) => {
+    return "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file;
+  }
 });
 
 hands.setOptions({
-  maxNumHands:1,
-  minDetectionConfidence:0.5,
-  minTrackingConfidence:0.5
+  maxNumHands: 1
 });
 
 let lastFinger = 0;
 
-// DETEKSI JARI (LEBIH STABIL)
-hands.onResults(res=>{
+hands.onResults(function(results){
+
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-  if(res.multiHandLandmarks){
-    const lm = res.multiHandLandmarks[0];
+  if(results.multiHandLandmarks){
+
+    const lm = results.multiHandLandmarks[0];
 
     drawConnectors(ctx, lm, HAND_CONNECTIONS);
     drawLandmarks(ctx, lm);
 
     let count = 0;
 
-    // logika lebih stabil
-    if(lm[8].y < lm[6].y) count++;   // telunjuk
-    if(lm[12].y < lm[10].y) count++; // tengah
-    if(lm[16].y < lm[14].y) count++; // manis
-    if(lm[20].y < lm[18].y) count++; // kelingking
-    if(lm[4].x < lm[3].x) count++;   // jempol (approx)
+    if(lm[8].y < lm[6].y) count++;
+    if(lm[12].y < lm[10].y) count++;
+    if(lm[16].y < lm[14].y) count++;
+    if(lm[20].y < lm[18].y) count++;
+    if(lm[4].x < lm[3].x) count++;
 
     countText.innerText = "Jumlah jari: " + count;
 
     if(count !== lastFinger && count > 0){
-      statusText.innerText = "✋ " + count + " jari";
-      speak(sounds[count]);
+      speak("jari " + count);
+      statusText.innerText = count + " jari terdeteksi";
       lastFinger = count;
     }
 
   } else {
     countText.innerText = "Jumlah jari: 0";
   }
+
 });
 
 // CAMERA
-async function start(){
-  const stream = await navigator.mediaDevices.getUserMedia({video:true});
-  video.srcObject = stream;
+async function startCamera(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject = stream;
 
-  video.onloadedmetadata = () => {
-    video.play();
-    loop();
-  };
+    video.onloadedmetadata = function(){
+      video.play();
+      run();
+    };
+
+  } catch(e){
+    alert("kamera gagal");
+    console.log(e);
+  }
 }
 
-function loop(){
+function run(){
+
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  async function draw(){
-    await hands.send({image:video});
-    requestAnimationFrame(draw);
+  async function loop(){
+    await hands.send({image: video});
+    requestAnimationFrame(loop);
   }
 
-  draw();
+  loop();
 }
 
-start();
+startCamera();
 </script>
 
 </body>
