@@ -1,33 +1,109 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Finger & Eye Detection</title>
+  <title>AI Finger & Eye PRO</title>
+
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #0f172a;
+      color: white;
+      margin: 0;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .left {
+      width: 35%;
+      padding: 15px;
+      background: #1e293b;
+    }
+
+    .right {
+      width: 65%;
+      text-align: center;
+      padding: 10px;
+    }
+
+    input {
+      width: 90%;
+      padding: 6px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: none;
+    }
+
+    video {
+      border-radius: 15px;
+      width: 90%;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #38bdf8;
+    }
+
+    .camera-box {
+      position: relative;
+      display: inline-block;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 18px;
+      color: #22c55e;
+    }
+  </style>
 </head>
 
 <body>
-<div style="display:flex; flex-wrap:wrap;">
 
-  <!-- KIRI -->
-  <div style="width:40%;">
-    <h3>Pengaturan Suara</h3>
+<div class="container">
+
+  <!-- LEFT -->
+  <div class="left">
+    <h2>⚙️ Pengaturan Suara</h2>
     <div id="settings"></div>
   </div>
 
-  <!-- KANAN -->
-  <div style="width:60%;">
-    <video id="video" autoplay playsinline width="300"></video>
+  <!-- RIGHT -->
+  <div class="right">
+    <h2>📷 Kamera AI</h2>
+
+    <div class="camera-box">
+      <video id="video" autoplay playsinline></video>
+
+      <!-- OVERLAY JUMLAH JARI -->
+      <div id="fingerCount" class="overlay">
+        Jumlah jari: 0
+      </div>
+    </div>
+
+    <div class="status" id="status">Menunggu deteksi...</div>
   </div>
 
 </div>
 
 <script>
-const videoElement = document.getElementById('video');
+const video = document.getElementById("video");
+const statusText = document.getElementById("status");
+const fingerCountText = document.getElementById("fingerCount");
 
-// suara default
-let sounds = {
+// LOAD STORAGE
+let sounds = JSON.parse(localStorage.getItem("sounds")) || {
   1:"Saya manusia",
   2:"Halo",
   3:"Selamat datang",
@@ -40,33 +116,45 @@ let sounds = {
   10:"Jari sepuluh"
 };
 
-// buat input setting
+// UI INPUT
 const settingsDiv = document.getElementById("settings");
 for(let i=1;i<=10;i++){
   settingsDiv.innerHTML += `
     <label>Jari ${i}</label><br>
-    <input id="f${i}" value="${sounds[i]}"><br><br>
+    <input id="f${i}" value="${sounds[i]}"><br>
   `;
 }
 
-// fungsi suara
+// AUTO SAVE
+setInterval(()=>{
+  for(let i=1;i<=10;i++){
+    sounds[i] = document.getElementById("f"+i).value;
+  }
+  localStorage.setItem("sounds", JSON.stringify(sounds));
+},1000);
+
+// SPEAK (ANTI SPAM)
+let lastSpeak = 0;
 function speak(text){
+  let now = Date.now();
+  if(now - lastSpeak < 2000) return;
+
   const utter = new SpeechSynthesisUtterance(text);
   speechSynthesis.speak(utter);
+  lastSpeak = now;
 }
 
-// DETEKSI TANGAN
+// HAND DETECTION
 const hands = new Hands({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
 hands.setOptions({
   maxNumHands: 1,
-  minDetectionConfidence: 0.7,
-  minTrackingConfidence: 0.7
+  minDetectionConfidence: 0.7
 });
 
-hands.onResults(results => {
+hands.onResults(results=>{
   if(results.multiHandLandmarks){
     const lm = results.multiHandLandmarks[0];
 
@@ -77,16 +165,23 @@ hands.onResults(results => {
       if(lm[tip].y < lm[tip-2].y) count++;
     });
 
-    if(count>0){
-      sounds[count] = document.getElementById("f"+count).value;
+    // UPDATE OVERLAY
+    fingerCountText.innerText = "Jumlah jari: " + count;
+
+    if(count > 0){
+      statusText.innerText = "✋ Terdeteksi: " + count + " jari";
       speak(sounds[count]);
     }
+  } else {
+    fingerCountText.innerText = "Jumlah jari: 0";
   }
 });
 
-// DETEKSI MATA
+// EYE DETECTION
+let eyeClosedFrames = 0;
+
 const faceMesh = new FaceMesh({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
 });
 
 faceMesh.setOptions({
@@ -97,20 +192,30 @@ faceMesh.onResults(results=>{
   if(results.multiFaceLandmarks){
     const lm = results.multiFaceLandmarks[0];
 
-    const eyeTop = lm[159].y;
-    const eyeBottom = lm[145].y;
+    const top = lm[159].y;
+    const bottom = lm[145].y;
 
-    if(Math.abs(eyeTop - eyeBottom) < 0.01){
+    let distance = Math.abs(top - bottom);
+
+    if(distance < 0.008){
+      eyeClosedFrames++;
+    } else {
+      eyeClosedFrames = 0;
+    }
+
+    if(eyeClosedFrames > 5){
+      statusText.innerText = "😴 Mata tertutup";
       speak("anda merem");
+      eyeClosedFrames = 0;
     }
   }
 });
 
-// AKTIFKAN KAMERA
-const camera = new Camera(videoElement, {
+// CAMERA
+const camera = new Camera(video, {
   onFrame: async () => {
-    await hands.send({image: videoElement});
-    await faceMesh.send({image: videoElement});
+    await hands.send({image: video});
+    await faceMesh.send({image: video});
   },
   width: 640,
   height: 480
