@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI Finger & Eye PRO</title>
+  <title>AI Finger & Eye PRO (Accurate)</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
   <style>
     body {
@@ -41,19 +42,12 @@
     }
 
     video {
-      border-radius: 15px;
+      display: none;
+    }
+
+    canvas {
       width: 90%;
-    }
-
-    .status {
-      margin-top: 10px;
-      font-size: 18px;
-      color: #38bdf8;
-    }
-
-    .camera-box {
-      position: relative;
-      display: inline-block;
+      border-radius: 15px;
     }
 
     .overlay {
@@ -67,7 +61,18 @@
       color: #22c55e;
     }
 
-    .sound-btn {
+    .camera-box {
+      position: relative;
+      display: inline-block;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #38bdf8;
+    }
+
+    .btn {
       position: fixed;
       top: 10px;
       right: 10px;
@@ -83,85 +88,69 @@
 
 <body>
 
-<!-- 🔊 BUTTON AKTIFKAN SUARA -->
-<button class="sound-btn" onclick="enableSound()">🔊 Aktifkan Suara</button>
+<button class="btn" onclick="enableSound()">🔊 Aktifkan Suara</button>
 
 <div class="container">
 
-  <!-- LEFT -->
   <div class="left">
     <h2>⚙️ Pengaturan Suara</h2>
     <div id="settings"></div>
   </div>
 
-  <!-- RIGHT -->
   <div class="right">
     <h2>📷 Kamera AI</h2>
 
     <div class="camera-box">
       <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
 
       <div id="fingerCount" class="overlay">
         Jumlah jari: 0
       </div>
     </div>
 
-    <div class="status" id="status">Menunggu deteksi...</div>
+    <div id="status" class="status">Menunggu deteksi...</div>
   </div>
 
 </div>
 
 <script>
 const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 const statusText = document.getElementById("status");
 const fingerCountText = document.getElementById("fingerCount");
 
-// 🔊 SOUND CONTROL
+// SOUND
 let soundEnabled = false;
 let lastSpeak = 0;
 
 function enableSound(){
   soundEnabled = true;
-
-  const utter = new SpeechSynthesisUtterance("Suara aktif");
-  speechSynthesis.speak(utter);
+  speechSynthesis.speak(new SpeechSynthesisUtterance("Suara aktif"));
 }
 
 function speak(text){
   if(!soundEnabled) return;
-
   let now = Date.now();
   if(now - lastSpeak < 2000) return;
-
-  const utter = new SpeechSynthesisUtterance(text);
-  speechSynthesis.speak(utter);
+  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   lastSpeak = now;
 }
 
-// LOAD STORAGE
-let sounds = JSON.parse(localStorage.getItem("sounds")) || {
-  1:"Saya manusia",
-  2:"Halo",
-  3:"Selamat datang",
-  4:"Jari empat",
-  5:"Jari lima",
-  6:"Jari enam",
-  7:"Jari tujuh",
-  8:"Jari delapan",
-  9:"Jari sembilan",
-  10:"Jari sepuluh"
-};
-
-// UI INPUT
+// SETTINGS
+let sounds = JSON.parse(localStorage.getItem("sounds")) || {};
 const settingsDiv = document.getElementById("settings");
+
 for(let i=1;i<=10;i++){
+  if(!sounds[i]) sounds[i] = "Jari " + i;
+
   settingsDiv.innerHTML += `
     <label>Jari ${i}</label><br>
     <input id="f${i}" value="${sounds[i]}"><br>
   `;
 }
 
-// AUTO SAVE
 setInterval(()=>{
   for(let i=1;i<=10;i++){
     sounds[i] = document.getElementById("f"+i).value;
@@ -169,65 +158,78 @@ setInterval(()=>{
   localStorage.setItem("sounds", JSON.stringify(sounds));
 },1000);
 
-// HAND DETECTION
+// HAND
 const hands = new Hands({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
 });
 
 hands.setOptions({
   maxNumHands: 1,
-  minDetectionConfidence: 0.7
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
 });
 
-hands.onResults(results=>{
-  if(results.multiHandLandmarks){
-    const lm = results.multiHandLandmarks[0];
+// FACE
+const faceMesh = new FaceMesh({
+  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+// DETECTION
+let lastFinger = 0;
+let eyeClosedFrames = 0;
+
+// DRAW + HAND
+hands.onResults(res=>{
+  ctx.drawImage(res.image,0,0,canvas.width,canvas.height);
+
+  if(res.multiHandLandmarks){
+    const lm = res.multiHandLandmarks[0];
+
+    drawConnectors(ctx, lm, HAND_CONNECTIONS);
+    drawLandmarks(ctx, lm);
 
     let count = 0;
     const tips = [4,8,12,16,20];
 
-    tips.forEach(tip=>{
-      if(lm[tip].y < lm[tip-2].y) count++;
+    tips.forEach(t=>{
+      if(lm[t].y < lm[t-2].y) count++;
     });
 
     fingerCountText.innerText = "Jumlah jari: " + count;
 
-    if(count > 0){
-      statusText.innerText = "✋ Terdeteksi: " + count + " jari";
+    if(count !== lastFinger && count > 0){
+      statusText.innerText = "✋ " + count + " jari";
       speak(sounds[count]);
+      lastFinger = count;
     }
   } else {
     fingerCountText.innerText = "Jumlah jari: 0";
   }
 });
 
-// EYE DETECTION
-let eyeClosedFrames = 0;
+// FACE
+faceMesh.onResults(res=>{
+  if(res.multiFaceLandmarks){
+    const lm = res.multiFaceLandmarks[0];
 
-const faceMesh = new FaceMesh({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-});
-
-faceMesh.setOptions({
-  maxNumFaces: 1
-});
-
-faceMesh.onResults(results=>{
-  if(results.multiFaceLandmarks){
-    const lm = results.multiFaceLandmarks[0];
-
+    // EAR (lebih akurat)
     const top = lm[159].y;
     const bottom = lm[145].y;
+    const ear = Math.abs(top - bottom);
 
-    let distance = Math.abs(top - bottom);
-
-    if(distance < 0.008){
+    if(ear < 0.01){
       eyeClosedFrames++;
     } else {
       eyeClosedFrames = 0;
     }
 
-    if(eyeClosedFrames > 5){
+    if(eyeClosedFrames > 4){
       statusText.innerText = "😴 Mata tertutup";
       speak("anda merem");
       eyeClosedFrames = 0;
@@ -235,11 +237,21 @@ faceMesh.onResults(results=>{
   }
 });
 
-// CAMERA
+// CAMERA FIX (NO TABRAKAN)
+let toggle = true;
+
 const camera = new Camera(video, {
   onFrame: async () => {
-    await hands.send({image: video});
-    await faceMesh.send({image: video});
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    if(toggle){
+      await hands.send({image: video});
+    } else {
+      await faceMesh.send({image: video});
+    }
+
+    toggle = !toggle;
   },
   width: 640,
   height: 480
@@ -249,4 +261,4 @@ camera.start();
 </script>
 
 </body>
-</html>
+  </html>
