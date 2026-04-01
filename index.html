@@ -1,274 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI Finger & Eye PRO (FIX CAMERA)</title>
-
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-
-  <style>
-    body {
-      font-family: Arial;
-      background: #0f172a;
-      color: white;
-      margin: 0;
-    }
-
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-    }
-
-    .left {
-      width: 35%;
-      padding: 15px;
-      background: #1e293b;
-    }
-
-    .right {
-      width: 65%;
-      text-align: center;
-      padding: 10px;
-    }
-
-    input {
-      width: 90%;
-      padding: 6px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      border: none;
-    }
-
-    canvas {
-      width: 90%;
-      border-radius: 15px;
-    }
-
-    .camera-box {
-      position: relative;
-      display: inline-block;
-    }
-
-    .overlay {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.6);
-      padding: 8px 12px;
-      border-radius: 10px;
-      font-size: 18px;
-      color: #22c55e;
-    }
-
-    .status {
-      margin-top: 10px;
-      font-size: 18px;
-      color: #38bdf8;
-    }
-
-    .btn {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 10px;
-      border: none;
-      border-radius: 10px;
-      background: #22c55e;
-      color: white;
-      z-index: 999;
-    }
-  </style>
+  <title>Test Kamera</title>
 </head>
+<body style="background:black; color:white; text-align:center;">
 
-<body>
-
-<button class="btn" onclick="enableSound()">🔊 Aktifkan Suara</button>
-
-<div class="container">
-
-  <div class="left">
-    <h2>⚙️ Pengaturan Suara</h2>
-    <div id="settings"></div>
-  </div>
-
-  <div class="right">
-    <h2>📷 Kamera AI</h2>
-
-    <div class="camera-box">
-      <video id="video" autoplay playsinline style="display:none;"></video>
-      <canvas id="canvas"></canvas>
-
-      <div id="fingerCount" class="overlay">
-        Jumlah jari: 0
-      </div>
-    </div>
-
-    <div id="status" class="status">Menunggu deteksi...</div>
-  </div>
-
-</div>
+<h2>Test Kamera</h2>
+<video id="video" autoplay playsinline width="300"></video>
 
 <script>
 const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const statusText = document.getElementById("status");
-const fingerCountText = document.getElementById("fingerCount");
 
-// SOUND
-let soundEnabled = false;
-let lastSpeak = 0;
-
-function enableSound(){
-  soundEnabled = true;
-  speechSynthesis.speak(new SpeechSynthesisUtterance("Suara aktif"));
-}
-
-function speak(text){
-  if(!soundEnabled) return;
-
-  let now = Date.now();
-  if(now - lastSpeak < 2000) return;
-
-  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-  lastSpeak = now;
-}
-
-// SETTINGS
-let sounds = JSON.parse(localStorage.getItem("sounds")) || {};
-const settingsDiv = document.getElementById("settings");
-
-for(let i=1;i<=10;i++){
-  if(!sounds[i]) sounds[i] = "Jari " + i;
-
-  settingsDiv.innerHTML += `
-    <label>Jari ${i}</label><br>
-    <input id="f${i}" value="${sounds[i]}"><br>
-  `;
-}
-
-setInterval(()=>{
-  for(let i=1;i<=10;i++){
-    sounds[i] = document.getElementById("f"+i).value;
-  }
-  localStorage.setItem("sounds", JSON.stringify(sounds));
-},1000);
-
-// MEDIAPIPE
-const hands = new Hands({
-  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
-});
-
-hands.setOptions({
-  maxNumHands: 1,
-  minDetectionConfidence: 0.6
-});
-
-const faceMesh = new FaceMesh({
-  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
-});
-
-faceMesh.setOptions({
-  maxNumFaces: 1,
-  minDetectionConfidence: 0.6
-});
-
-// STATE
-let toggle = true;
-let lastFinger = 0;
-let eyeClosedFrames = 0;
-
-// HAND RESULT
-hands.onResults(res=>{
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
-  if(res.multiHandLandmarks){
-    const lm = res.multiHandLandmarks[0];
-
-    drawConnectors(ctx, lm, HAND_CONNECTIONS);
-    drawLandmarks(ctx, lm);
-
-    let count = 0;
-    const tips = [4,8,12,16,20];
-
-    tips.forEach(t=>{
-      if(lm[t].y < lm[t-2].y) count++;
-    });
-
-    fingerCountText.innerText = "Jumlah jari: " + count;
-
-    if(count !== lastFinger && count > 0){
-      statusText.innerText = "✋ " + count + " jari";
-      speak(sounds[count]);
-      lastFinger = count;
-    }
-  } else {
-    fingerCountText.innerText = "Jumlah jari: 0";
-  }
-});
-
-// FACE RESULT
-faceMesh.onResults(res=>{
-  if(res.multiFaceLandmarks){
-    const lm = res.multiFaceLandmarks[0];
-
-    const top = lm[159].y;
-    const bottom = lm[145].y;
-    const ear = Math.abs(top - bottom);
-
-    if(ear < 0.01){
-      eyeClosedFrames++;
-    } else {
-      eyeClosedFrames = 0;
-    }
-
-    if(eyeClosedFrames > 4){
-      statusText.innerText = "😴 Mata tertutup";
-      speak("anda merem");
-      eyeClosedFrames = 0;
-    }
-  }
-});
-
-// CAMERA FIX
 async function startCamera(){
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
-      audio: false
+      video: true
     });
 
     video.srcObject = stream;
-
-    video.onloadedmetadata = () => {
-      video.play();
-      runDetection();
-    };
+    console.log("Kamera aktif");
 
   } catch (err) {
-    alert("Kamera tidak bisa diakses 😢");
+    alert("GAGAL AKSES KAMERA");
     console.error(err);
   }
-}
-
-function runDetection(){
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  async function detect(){
-    if(toggle){
-      await hands.send({image: video});
-    } else {
-      await faceMesh.send({image: video});
-    }
-
-    toggle = !toggle;
-
-    requestAnimationFrame(detect);
-  }
-
-  detect();
 }
 
 startCamera();
