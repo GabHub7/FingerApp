@@ -1,42 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI FIX FINAL NO MIRROR</title>
+  <title>AI HP FINAL WORK</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.0.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
 
   <style>
     body{
       background:#0f172a;
       color:white;
-      font-family:Arial;
-      margin:0;
-    }
-
-    .container{
-      display:flex;
-      flex-wrap:wrap;
-    }
-
-    .left{
-      width:40%;
-      background:#1e293b;
-      padding:10px;
-    }
-
-    .right{
-      width:60%;
       text-align:center;
-    }
-
-    input{
-      width:90%;
-      margin-bottom:8px;
-      padding:6px;
-      border-radius:8px;
-      border:none;
+      font-family:Arial;
     }
 
     video{
@@ -45,26 +20,24 @@
       transform: scaleX(1); /* NO MIRROR */
     }
 
-    canvas{
-      position:absolute;
-      top:0;
-      left:5%;
+    input{
       width:90%;
-      pointer-events:none;
-    }
-
-    .box{
-      position:relative;
+      margin:5px;
+      padding:6px;
     }
 
     .overlay{
       position:absolute;
       top:10px;
       left:10px;
-      background:rgba(0,0,0,0.6);
+      background:black;
       padding:8px;
       border-radius:10px;
       color:#22c55e;
+    }
+
+    .box{
+      position:relative;
     }
 
     button{
@@ -72,10 +45,10 @@
       top:10px;
       right:10px;
       padding:10px;
-      border:none;
-      border-radius:10px;
       background:#22c55e;
       color:white;
+      border:none;
+      border-radius:10px;
     }
   </style>
 </head>
@@ -84,33 +57,20 @@
 
 <button onclick="enableSound()">🔊 Aktifkan Suara</button>
 
-<div class="container">
-
-<div class="left">
-<h3>⚙️ Setting Suara</h3>
-<div id="settings"></div>
-</div>
-
-<div class="right">
-
-<h3>📷 Kamera</h3>
+<h2>📷 Kamera</h2>
 
 <div class="box">
   <video id="video" autoplay playsinline></video>
-  <canvas id="canvas"></canvas>
-  <div id="count" class="overlay">Jumlah jari: 0</div>
+  <div id="count" class="overlay">Deteksi: -</div>
 </div>
 
 <h3 id="status">Menunggu...</h3>
 
-</div>
-</div>
+<h3>⚙️ Setting Suara</h3>
+<div id="settings"></div>
 
 <script>
 const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
 const countText = document.getElementById("count");
 const statusText = document.getElementById("status");
 
@@ -141,7 +101,6 @@ for(let i=1;i<=10;i++){
   if(!sounds[i]) sounds[i] = "Jari " + i;
 
   settingsDiv.innerHTML += `
-    <label>Jari ${i}</label><br>
     <input id="f${i}" value="${sounds[i]}"><br>
   `;
 }
@@ -153,99 +112,45 @@ setInterval(()=>{
   localStorage.setItem("sounds", JSON.stringify(sounds));
 },1000);
 
-// MEDIAPIPE
-const hands = new Hands({
-  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
-});
-
-hands.setOptions({maxNumHands:1});
-
-const faceMesh = new FaceMesh({
-  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
-});
-
-faceMesh.setOptions({maxNumFaces:1});
-
-let lastFinger = 0;
-let eyeClosedFrames = 0;
-
-// HAND
-hands.onResults(res=>{
-  if(res.multiHandLandmarks){
-    const lm = res.multiHandLandmarks[0];
-
-    drawConnectors(ctx, lm, HAND_CONNECTIONS);
-    drawLandmarks(ctx, lm);
-
-    let count = 0;
-
-    if(lm[8].y < lm[6].y) count++;
-    if(lm[12].y < lm[10].y) count++;
-    if(lm[16].y < lm[14].y) count++;
-    if(lm[20].y < lm[18].y) count++;
-    if(lm[4].x < lm[3].x) count++;
-
-    countText.innerText = "Jumlah jari: " + count;
-
-    if(count !== lastFinger && count > 0){
-      speak(sounds[count]);
-      statusText.innerText = "✋ " + count + " jari";
-      lastFinger = count;
-    }
-  }
-});
-
-// FACE
-faceMesh.onResults(res=>{
-  if(res.multiFaceLandmarks){
-    const lm = res.multiFaceLandmarks[0];
-
-    let ear = Math.abs(lm[159].y - lm[145].y);
-
-    if(ear < 0.01){
-      eyeClosedFrames++;
-    } else {
-      eyeClosedFrames = 0;
-    }
-
-    if(eyeClosedFrames > 3){
-      speak("anda merem");
-      statusText.innerText = "😴 Mata tertutup";
-      eyeClosedFrames = 0;
-    }
-  }
-});
-
-// CAMERA
-async function start(){
+// CAMERA (DEPAN, NO MIRROR)
+async function startCamera(){
   const stream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:"environment" } // NON MIRROR
+    video:{ facingMode:"user" }
   });
 
   video.srcObject = stream;
-
-  video.onloadedmetadata = ()=>{
-    video.play();
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    startLoop();
-  };
 }
 
-// LOOP STABIL (KUNCI FIX)
-function startLoop(){
-  setInterval(()=>{
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+let model;
 
-    hands.send({image:video});
-    faceMesh.send({image:video});
-
-  }, 150); // jangan terlalu cepat
+// LOAD MODEL
+async function loadModel(){
+  model = await handpose.load();
+  detect();
 }
 
-start();
+// DETEKSI
+async function detect(){
+  if(!model) return;
+
+  const predictions = await model.estimateHands(video);
+
+  if(predictions.length > 0){
+    statusText.innerText = "✋ Tangan terdeteksi";
+    countText.innerText = "Terdeteksi";
+
+    speak("tangan terdeteksi");
+  }else{
+    statusText.innerText = "Tidak ada tangan";
+    countText.innerText = "-";
+  }
+
+  setTimeout(detect, 500);
+}
+
+// START
+startCamera();
+loadModel();
 </script>
 
 </body>
