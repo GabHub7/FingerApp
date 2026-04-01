@@ -66,10 +66,25 @@
       font-size: 18px;
       color: #22c55e;
     }
+
+    .sound-btn {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      background: #22c55e;
+      color: white;
+      z-index: 999;
+    }
   </style>
 </head>
 
 <body>
+
+<!-- 🔊 BUTTON AKTIFKAN SUARA -->
+<button class="sound-btn" onclick="enableSound()">🔊 Aktifkan Suara</button>
 
 <div class="container">
 
@@ -86,7 +101,6 @@
     <div class="camera-box">
       <video id="video" autoplay playsinline></video>
 
-      <!-- OVERLAY JUMLAH JARI -->
       <div id="fingerCount" class="overlay">
         Jumlah jari: 0
       </div>
@@ -101,6 +115,28 @@
 const video = document.getElementById("video");
 const statusText = document.getElementById("status");
 const fingerCountText = document.getElementById("fingerCount");
+
+// 🔊 SOUND CONTROL
+let soundEnabled = false;
+let lastSpeak = 0;
+
+function enableSound(){
+  soundEnabled = true;
+
+  const utter = new SpeechSynthesisUtterance("Suara aktif");
+  speechSynthesis.speak(utter);
+}
+
+function speak(text){
+  if(!soundEnabled) return;
+
+  let now = Date.now();
+  if(now - lastSpeak < 2000) return;
+
+  const utter = new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(utter);
+  lastSpeak = now;
+}
 
 // LOAD STORAGE
 let sounds = JSON.parse(localStorage.getItem("sounds")) || {
@@ -133,17 +169,6 @@ setInterval(()=>{
   localStorage.setItem("sounds", JSON.stringify(sounds));
 },1000);
 
-// SPEAK (ANTI SPAM)
-let lastSpeak = 0;
-function speak(text){
-  let now = Date.now();
-  if(now - lastSpeak < 2000) return;
-
-  const utter = new SpeechSynthesisUtterance(text);
-  speechSynthesis.speak(utter);
-  lastSpeak = now;
-}
-
 // HAND DETECTION
 const hands = new Hands({
   locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -165,7 +190,6 @@ hands.onResults(results=>{
       if(lm[tip].y < lm[tip-2].y) count++;
     });
 
-    // UPDATE OVERLAY
     fingerCountText.innerText = "Jumlah jari: " + count;
 
     if(count > 0){
