@@ -1,156 +1,71 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI HP FINAL WORK</title>
+  <title>TEST MEDIAPIPE</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.0.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
-
-  <style>
-    body{
-      background:#0f172a;
-      color:white;
-      text-align:center;
-      font-family:Arial;
-    }
-
-    video{
-      width:90%;
-      border-radius:15px;
-      transform: scaleX(1); /* NO MIRROR */
-    }
-
-    input{
-      width:90%;
-      margin:5px;
-      padding:6px;
-    }
-
-    .overlay{
-      position:absolute;
-      top:10px;
-      left:10px;
-      background:black;
-      padding:8px;
-      border-radius:10px;
-      color:#22c55e;
-    }
-
-    .box{
-      position:relative;
-    }
-
-    button{
-      position:fixed;
-      top:10px;
-      right:10px;
-      padding:10px;
-      background:#22c55e;
-      color:white;
-      border:none;
-      border-radius:10px;
-    }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 </head>
 
-<body>
+<body style="background:black;color:white;text-align:center">
 
-<button onclick="enableSound()">🔊 Aktifkan Suara</button>
+<h2>TEST MEDIAPIPE</h2>
 
-<h2>📷 Kamera</h2>
+<video id="video" autoplay playsinline width="300"
+style="transform: scaleX(-1);"></video>
 
-<div class="box">
-  <video id="video" autoplay playsinline></video>
-  <div id="count" class="overlay">Deteksi: -</div>
-</div>
-
-<h3 id="status">Menunggu...</h3>
-
-<h3>⚙️ Setting Suara</h3>
-<div id="settings"></div>
+<h3 id="log">Loading...</h3>
 
 <script>
 const video = document.getElementById("video");
-const countText = document.getElementById("count");
-const statusText = document.getElementById("status");
+const log = document.getElementById("log");
 
-// SOUND
-let soundEnabled = false;
-let lastSpeak = 0;
+// CAMERA DEPAN
+async function start(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:"user" }
+    });
 
-function enableSound(){
-  soundEnabled = true;
-  speechSynthesis.speak(new SpeechSynthesisUtterance("aktif"));
-}
+    video.srcObject = stream;
+    log.innerText = "Kamera OK";
 
-function speak(text){
-  if(!soundEnabled) return;
-
-  let now = Date.now();
-  if(now - lastSpeak < 2000) return;
-
-  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-  lastSpeak = now;
-}
-
-// SETTINGS
-let sounds = JSON.parse(localStorage.getItem("sounds")) || {};
-const settingsDiv = document.getElementById("settings");
-
-for(let i=1;i<=10;i++){
-  if(!sounds[i]) sounds[i] = "Jari " + i;
-
-  settingsDiv.innerHTML += `
-    <input id="f${i}" value="${sounds[i]}"><br>
-  `;
-}
-
-setInterval(()=>{
-  for(let i=1;i<=10;i++){
-    sounds[i] = document.getElementById("f"+i).value;
+  }catch(e){
+    log.innerText = "Kamera ERROR";
+    console.log(e);
   }
-  localStorage.setItem("sounds", JSON.stringify(sounds));
-},1000);
-
-// CAMERA (DEPAN, NO MIRROR)
-async function startCamera(){
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:"user" }
-  });
-
-  video.srcObject = stream;
 }
 
-let model;
+// MEDIAPIPE
+const hands = new Hands({
+  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+});
 
-// LOAD MODEL
-async function loadModel(){
-  model = await handpose.load();
-  detect();
-}
+hands.setOptions({
+  maxNumHands:1
+});
 
-// DETEKSI
-async function detect(){
-  if(!model) return;
+// DETEKSI RESULT
+hands.onResults(res=>{
+  log.innerText = "DETECT JALAN";
 
-  const predictions = await model.estimateHands(video);
-
-  if(predictions.length > 0){
-    statusText.innerText = "✋ Tangan terdeteksi";
-    countText.innerText = "Terdeteksi";
-
-    speak("tangan terdeteksi");
-  }else{
-    statusText.innerText = "Tidak ada tangan";
-    countText.innerText = "-";
+  if(res.multiHandLandmarks){
+    log.innerText = "TANGAN TERDETEKSI ✅";
   }
+});
 
-  setTimeout(detect, 500);
+// LOOP
+async function detectLoop(){
+  await hands.send({image: video});
+  requestAnimationFrame(detectLoop);
 }
 
 // START
-startCamera();
-loadModel();
+start();
+
+setTimeout(()=>{
+  detectLoop();
+},2000);
+
 </script>
 
 </body>
