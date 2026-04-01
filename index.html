@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Finger & Eye Detection</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+</head>
+
+<body>
+<div style="display:flex; flex-wrap:wrap;">
+
+  <!-- KIRI -->
+  <div style="width:40%;">
+    <h3>Pengaturan Suara</h3>
+    <div id="settings"></div>
+  </div>
+
+  <!-- KANAN -->
+  <div style="width:60%;">
+    <video id="video" autoplay playsinline width="300"></video>
+  </div>
+
+</div>
+
+<script>
+const videoElement = document.getElementById('video');
+
+// suara default
+let sounds = {
+  1:"Saya manusia",
+  2:"Halo",
+  3:"Selamat datang",
+  4:"Jari empat",
+  5:"Jari lima",
+  6:"Jari enam",
+  7:"Jari tujuh",
+  8:"Jari delapan",
+  9:"Jari sembilan",
+  10:"Jari sepuluh"
+};
+
+// buat input setting
+const settingsDiv = document.getElementById("settings");
+for(let i=1;i<=10;i++){
+  settingsDiv.innerHTML += `
+    <label>Jari ${i}</label><br>
+    <input id="f${i}" value="${sounds[i]}"><br><br>
+  `;
+}
+
+// fungsi suara
+function speak(text){
+  const utter = new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(utter);
+}
+
+// DETEKSI TANGAN
+const hands = new Hands({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+  maxNumHands: 1,
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.7
+});
+
+hands.onResults(results => {
+  if(results.multiHandLandmarks){
+    const lm = results.multiHandLandmarks[0];
+
+    let count = 0;
+    const tips = [4,8,12,16,20];
+
+    tips.forEach(tip=>{
+      if(lm[tip].y < lm[tip-2].y) count++;
+    });
+
+    if(count>0){
+      sounds[count] = document.getElementById("f"+count).value;
+      speak(sounds[count]);
+    }
+  }
+});
+
+// DETEKSI MATA
+const faceMesh = new FaceMesh({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1
+});
+
+faceMesh.onResults(results=>{
+  if(results.multiFaceLandmarks){
+    const lm = results.multiFaceLandmarks[0];
+
+    const eyeTop = lm[159].y;
+    const eyeBottom = lm[145].y;
+
+    if(Math.abs(eyeTop - eyeBottom) < 0.01){
+      speak("anda merem");
+    }
+  }
+});
+
+// AKTIFKAN KAMERA
+const camera = new Camera(videoElement, {
+  onFrame: async () => {
+    await hands.send({image: videoElement});
+    await faceMesh.send({image: videoElement});
+  },
+  width: 640,
+  height: 480
+});
+
+camera.start();
+</script>
+
+</body>
+</html>
