@@ -1,122 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Finger Detection Fix</title>
-
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <title>Kamera Fix 100%</title>
 </head>
 
 <body style="background:black; color:white; text-align:center;">
 
-<button onclick="enableSound()">Aktifkan Suara</button>
+<h2>KAMERA TEST</h2>
 
-<h2>Kamera</h2>
-
-<video id="video" autoplay playsinline style="display:none;"></video>
-<canvas id="canvas"></canvas>
-
-<h3 id="count">Jumlah jari: 0</h3>
-<h3 id="status">Menunggu...</h3>
+<video id="video" autoplay playsinline width="300" style="border:2px solid white;"></video>
 
 <script>
 const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
 
-const countText = document.getElementById("count");
-const statusText = document.getElementById("status");
-
-// SOUND
-let soundEnabled = false;
-
-function enableSound(){
-  soundEnabled = true;
-  speechSynthesis.speak(new SpeechSynthesisUtterance("aktif"));
-}
-
-function speak(text){
-  if(!soundEnabled) return;
-  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-}
-
-// MEDIAPIPE
-const hands = new Hands({
-  locateFile: (file) => {
-    return "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file;
-  }
-});
-
-hands.setOptions({
-  maxNumHands: 1
-});
-
-let lastFinger = 0;
-
-hands.onResults(function(results){
-
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
-  if(results.multiHandLandmarks){
-
-    const lm = results.multiHandLandmarks[0];
-
-    drawConnectors(ctx, lm, HAND_CONNECTIONS);
-    drawLandmarks(ctx, lm);
-
-    let count = 0;
-
-    if(lm[8].y < lm[6].y) count++;
-    if(lm[12].y < lm[10].y) count++;
-    if(lm[16].y < lm[14].y) count++;
-    if(lm[20].y < lm[18].y) count++;
-    if(lm[4].x < lm[3].x) count++;
-
-    countText.innerText = "Jumlah jari: " + count;
-
-    if(count !== lastFinger && count > 0){
-      speak("jari " + count);
-      statusText.innerText = count + " jari terdeteksi";
-      lastFinger = count;
-    }
-
-  } else {
-    countText.innerText = "Jumlah jari: 0";
-  }
-
-});
-
-// CAMERA
-async function startCamera(){
+async function start(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({video:true});
     video.srcObject = stream;
-
-    video.onloadedmetadata = function(){
-      video.play();
-      run();
-    };
-
-  } catch(e){
+    video.play();
+  }catch(e){
     alert("kamera gagal");
     console.log(e);
   }
 }
 
-function run(){
-
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  async function loop(){
-    await hands.send({image: video});
-    requestAnimationFrame(loop);
-  }
-
-  loop();
-}
-
-startCamera();
+start();
 </script>
 
 </body>
