@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI Finger & Eye PRO (Accurate)</title>
+  <title>AI Finger & Eye PRO (FIX CAMERA)</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
@@ -41,13 +40,14 @@
       border: none;
     }
 
-    video {
-      display: none;
-    }
-
     canvas {
       width: 90%;
       border-radius: 15px;
+    }
+
+    .camera-box {
+      position: relative;
+      display: inline-block;
     }
 
     .overlay {
@@ -59,11 +59,6 @@
       border-radius: 10px;
       font-size: 18px;
       color: #22c55e;
-    }
-
-    .camera-box {
-      position: relative;
-      display: inline-block;
     }
 
     .status {
@@ -101,7 +96,7 @@
     <h2>📷 Kamera AI</h2>
 
     <div class="camera-box">
-      <video id="video" autoplay playsinline></video>
+      <video id="video" autoplay playsinline style="display:none;"></video>
       <canvas id="canvas"></canvas>
 
       <div id="fingerCount" class="overlay">
@@ -132,8 +127,10 @@ function enableSound(){
 
 function speak(text){
   if(!soundEnabled) return;
+
   let now = Date.now();
   if(now - lastSpeak < 2000) return;
+
   speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   lastSpeak = now;
 }
@@ -158,35 +155,33 @@ setInterval(()=>{
   localStorage.setItem("sounds", JSON.stringify(sounds));
 },1000);
 
-// HAND
+// MEDIAPIPE
 const hands = new Hands({
   locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
 });
 
 hands.setOptions({
   maxNumHands: 1,
-  minDetectionConfidence: 0.6,
-  minTrackingConfidence: 0.6
+  minDetectionConfidence: 0.6
 });
 
-// FACE
 const faceMesh = new FaceMesh({
   locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
 });
 
 faceMesh.setOptions({
   maxNumFaces: 1,
-  minDetectionConfidence: 0.6,
-  minTrackingConfidence: 0.6
+  minDetectionConfidence: 0.6
 });
 
-// DETECTION
+// STATE
+let toggle = true;
 let lastFinger = 0;
 let eyeClosedFrames = 0;
 
-// DRAW + HAND
+// HAND RESULT
 hands.onResults(res=>{
-  ctx.drawImage(res.image,0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
   if(res.multiHandLandmarks){
     const lm = res.multiHandLandmarks[0];
@@ -213,12 +208,11 @@ hands.onResults(res=>{
   }
 });
 
-// FACE
+// FACE RESULT
 faceMesh.onResults(res=>{
   if(res.multiFaceLandmarks){
     const lm = res.multiFaceLandmarks[0];
 
-    // EAR (lebih akurat)
     const top = lm[159].y;
     const bottom = lm[145].y;
     const ear = Math.abs(top - bottom);
@@ -237,14 +231,32 @@ faceMesh.onResults(res=>{
   }
 });
 
-// CAMERA FIX (NO TABRAKAN)
-let toggle = true;
+// CAMERA FIX
+async function startCamera(){
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: false
+    });
 
-const camera = new Camera(video, {
-  onFrame: async () => {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    video.srcObject = stream;
 
+    video.onloadedmetadata = () => {
+      video.play();
+      runDetection();
+    };
+
+  } catch (err) {
+    alert("Kamera tidak bisa diakses 😢");
+    console.error(err);
+  }
+}
+
+function runDetection(){
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  async function detect(){
     if(toggle){
       await hands.send({image: video});
     } else {
@@ -252,13 +264,15 @@ const camera = new Camera(video, {
     }
 
     toggle = !toggle;
-  },
-  width: 640,
-  height: 480
-});
 
-camera.start();
+    requestAnimationFrame(detect);
+  }
+
+  detect();
+}
+
+startCamera();
 </script>
 
 </body>
-  </html>
+</html>
