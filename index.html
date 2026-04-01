@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI FINAL HP WORKING</title>
+  <title>AI FIX FINAL NO MIRROR</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -42,6 +42,7 @@
     video{
       width:90%;
       border-radius:15px;
+      transform: scaleX(1); /* NO MIRROR */
     }
 
     canvas{
@@ -92,7 +93,7 @@
 
 <div class="right">
 
-<h3>📷 Kamera AI</h3>
+<h3>📷 Kamera</h3>
 
 <div class="box">
   <video id="video" autoplay playsinline></video>
@@ -103,7 +104,6 @@
 <h3 id="status">Menunggu...</h3>
 
 </div>
-
 </div>
 
 <script>
@@ -120,7 +120,7 @@ let lastSpeak = 0;
 
 function enableSound(){
   soundEnabled = true;
-  speechSynthesis.speak(new SpeechSynthesisUtterance("suara aktif"));
+  speechSynthesis.speak(new SpeechSynthesisUtterance("aktif"));
 }
 
 function speak(text){
@@ -158,20 +158,13 @@ const hands = new Hands({
   locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
 });
 
-hands.setOptions({
-  maxNumHands:1,
-  minDetectionConfidence:0.5,
-  minTrackingConfidence:0.5
-});
+hands.setOptions({maxNumHands:1});
 
 const faceMesh = new FaceMesh({
   locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
 });
 
-faceMesh.setOptions({
-  maxNumFaces:1,
-  minDetectionConfidence:0.5
-});
+faceMesh.setOptions({maxNumFaces:1});
 
 let lastFinger = 0;
 let eyeClosedFrames = 0;
@@ -199,9 +192,6 @@ hands.onResults(res=>{
       statusText.innerText = "✋ " + count + " jari";
       lastFinger = count;
     }
-
-  } else {
-    countText.innerText = "Jumlah jari: 0";
   }
 });
 
@@ -218,7 +208,7 @@ faceMesh.onResults(res=>{
       eyeClosedFrames = 0;
     }
 
-    if(eyeClosedFrames > 4){
+    if(eyeClosedFrames > 3){
       speak("anda merem");
       statusText.innerText = "😴 Mata tertutup";
       eyeClosedFrames = 0;
@@ -228,33 +218,31 @@ faceMesh.onResults(res=>{
 
 // CAMERA
 async function start(){
-  const stream = await navigator.mediaDevices.getUserMedia({video:true});
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:"environment" } // NON MIRROR
+  });
+
   video.srcObject = stream;
 
-  video.onloadedmetadata = () => {
+  video.onloadedmetadata = ()=>{
     video.play();
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    loop();
+    startLoop();
   };
 }
 
-let toggle = true;
+// LOOP STABIL (KUNCI FIX)
+function startLoop(){
+  setInterval(()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-async function loop(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+    hands.send({image:video});
+    faceMesh.send({image:video});
 
-  if(toggle){
-    await hands.send({image:video});
-  } else {
-    await faceMesh.send({image:video});
-  }
-
-  toggle = !toggle;
-
-  requestAnimationFrame(loop);
+  }, 150); // jangan terlalu cepat
 }
 
 start();
